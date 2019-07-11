@@ -63,14 +63,13 @@ private Sentiment detectSentiment(String text, String division) {
     sentiment.scoreMixed = detectSentimentResult.sentimentScore.mixed
     sentiment.scoreNegative = detectSentimentResult.sentimentScore.negative
     sentiment.scorePositive = detectSentimentResult.sentimentScore.positive
-    if (sentiment.sentiment == "NEUTRAL" && sentiment.scorePositive > 0) {
+    sentiment.sentiment =  detectSentimentResult.sentiment
+    if (sentiment.sentiment == "NEUTRAL" && sentiment.scorePositive.round(3) > 0) {
         sentiment.sentiment = "POSITIVE"
     }
-    if (sentiment.sentiment == "NEUTRAL" && sentiment.scoreNegative > 0) {
+    if (sentiment.sentiment == "NEUTRAL" && sentiment.scoreNegative.round(3) > 0) {
         sentiment.sentiment = "NEGATIVE"
     }
-
-    sentiment.sentiment =  detectSentimentResult.sentiment
 
     sentiment
 
@@ -95,7 +94,7 @@ private Entities detectEntities(String text, String division) {
             .withLanguageCode("en")
     DetectEntitiesResult detectEntitiesResult  = comprehendClient.detectEntities(detectEntitiesRequest);
     boolean hasPlace = false
-    boolean hasPerson = true
+    boolean hasPerson = false
     boolean hasQuantity = false
 
     detectEntitiesResult.getEntities().each() { Entity awsEntity ->
@@ -103,7 +102,7 @@ private Entities detectEntities(String text, String division) {
         entity.beginOffset = awsEntity.beginOffset
         entity.endOffset = awsEntity.endOffset
         entity.entityType = awsEntity.type
-        if (entity.entityType.toLowerCase() == "place") {
+        if (entity.entityType.toLowerCase() == "location") {
             hasPlace = true
         }
         if (entity.entityType.toLowerCase() == "person") {
@@ -116,7 +115,7 @@ private Entities detectEntities(String text, String division) {
     }
     if (division.toLowerCase() == "travel") {
         if (!hasPlace) {
-           returnEntities.warnings = "No places detected for travel!"
+           returnEntities.warnings = "No locations detected for travel!"
         }
 
     }
@@ -194,6 +193,11 @@ private Languages detectLanguages(String text, String division) {
 
 private ComprehendResults detectAll(String text, String division) {
     ComprehendResults comprehendResults = new ComprehendResults()
+    if (text?.length() > 5000) {
+       comprehendResults.warnings = "Warning text is over 5000 chars, truncating!"
+        text =  text.substring(0,4999)
+    }
+
     Sentiment sentiment = detectSentiment(text,division)
     comprehendResults.sentiment = sentiment
     comprehendResults.entities = detectEntities(text,division)
