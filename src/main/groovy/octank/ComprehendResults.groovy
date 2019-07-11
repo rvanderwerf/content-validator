@@ -6,4 +6,5 @@ class ComprehendResults {
     Sentiment sentiment
     Languages languages
     KeyPhrases keyPhrases
+    String warnings
 }

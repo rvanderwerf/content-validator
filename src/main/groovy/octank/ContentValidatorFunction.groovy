@@ -63,6 +63,13 @@ private Sentiment detectSentiment(String text, String division) {
     sentiment.scoreMixed = detectSentimentResult.sentimentScore.mixed
     sentiment.scoreNegative = detectSentimentResult.sentimentScore.negative
     sentiment.scorePositive = detectSentimentResult.sentimentScore.positive
+    if (sentiment.sentiment == "NEUTRAL" && sentiment.scorePositive > 0) {
+        sentiment.sentiment = "POSITIVE"
+    }
+    if (sentiment.sentiment == "NEUTRAL" && sentiment.scoreNegative > 0) {
+        sentiment.sentiment = "NEGATIVE"
+    }
+
     sentiment.sentiment =  detectSentimentResult.sentiment
 
     sentiment
@@ -87,15 +94,43 @@ private Entities detectEntities(String text, String division) {
     DetectEntitiesRequest detectEntitiesRequest = new DetectEntitiesRequest().withText(text)
             .withLanguageCode("en")
     DetectEntitiesResult detectEntitiesResult  = comprehendClient.detectEntities(detectEntitiesRequest);
+    boolean hasPlace = false
+    boolean hasPerson = true
+    boolean hasQuantity = false
+
     detectEntitiesResult.getEntities().each() { Entity awsEntity ->
         octank.Entity entity = new octank.Entity()
         entity.beginOffset = awsEntity.beginOffset
         entity.endOffset = awsEntity.endOffset
         entity.entityType = awsEntity.type
+        if (entity.entityType.toLowerCase() == "place") {
+            hasPlace = true
+        }
+        if (entity.entityType.toLowerCase() == "person") {
+            hasPerson = true
+        }
+        if (entity.entityType.toLowerCase() == "quantity")
         entity.text = awsEntity.text
         entity.score = awsEntity.score
         entities.add(entity)
     }
+    if (division.toLowerCase() == "travel") {
+        if (!hasPlace) {
+           returnEntities.warnings = "No places detected for travel!"
+        }
+
+    }
+    if (division.toLowerCase() == "energy" || division.toLowerCase() == "health") {
+        if (!hasQuantity) {
+            returnEntities.warnings = "No quantities or numbers detected!"
+        }
+    }
+    if (division.toLowerCase() == "fashion") {
+        if (!hasPerson) {
+            returnEntities.warnings = "No people listed for fashion!"
+        }
+    }
+
     System.out.println("End of DetectEntities\n")
     returnEntities
 }
