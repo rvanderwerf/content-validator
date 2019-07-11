@@ -1,0 +1,169 @@
+package octank
+
+import com.amazonaws.auth.AWSCredentialsProvider
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
+import com.amazonaws.services.comprehend.AmazonComprehend
+import com.amazonaws.services.comprehend.AmazonComprehendClientBuilder
+import com.amazonaws.services.comprehend.model.DetectDominantLanguageRequest
+import com.amazonaws.services.comprehend.model.DetectDominantLanguageResult
+import com.amazonaws.services.comprehend.model.DetectEntitiesRequest
+import com.amazonaws.services.comprehend.model.DetectEntitiesResult
+import com.amazonaws.services.comprehend.model.DetectKeyPhrasesRequest
+import com.amazonaws.services.comprehend.model.DetectKeyPhrasesResult
+import com.amazonaws.services.comprehend.model.DetectSentimentRequest
+import com.amazonaws.services.comprehend.model.DetectSentimentResult
+import com.amazonaws.services.comprehend.model.DominantLanguage
+import com.amazonaws.services.comprehend.model.Entity
+
+import javax.inject.Inject
+import groovy.transform.Field
+
+
+
+
+@Field @Inject
+ContentValidatorService contentValidatorService
+
+/**
+ * this is the main entry point
+ * @param cmd
+ * @return
+ */
+ComprehendResults validate(ValidateCommand cmd) {
+    if (!cmd.division) {
+        System.out.println('No division given defaulting to travel')
+        cmd.division = "Travel" // default to travel
+    }
+       System.out.println("text=${cmd.text} ")
+      if (!contentValidatorService) {
+          System.out.println("Error - ContentValidatorService is NOT injected!!")
+      }
+      ComprehendResults results = detectAll(cmd.text,cmd.division)
+      results
+}
+
+
+
+private Sentiment detectSentiment(String text, String division) {
+    AWSCredentialsProvider awsCreds = DefaultAWSCredentialsProviderChain.getInstance()
+
+    AmazonComprehend comprehendClient =
+            AmazonComprehendClientBuilder.standard()
+                    .withCredentials(awsCreds)
+                    .withRegion("us-east-1")
+                    .build()
+
+    // Call detectSentiment API
+    System.out.println("Calling DetectSentiment")
+    DetectSentimentRequest detectSentimentRequest = new DetectSentimentRequest().withText(text)
+            .withLanguageCode("en")
+    DetectSentimentResult detectSentimentResult = comprehendClient.detectSentiment(detectSentimentRequest)
+
+    Sentiment sentiment = new Sentiment()
+    sentiment.scoreMixed = detectSentimentResult.sentimentScore.mixed
+    sentiment.scoreNegative = detectSentimentResult.sentimentScore.negative
+    sentiment.scorePositive = detectSentimentResult.sentimentScore.positive
+    sentiment.sentiment =  detectSentimentResult.sentiment
+
+    sentiment
+
+}
+
+
+private Entities detectEntities(String text, String division) {
+    List<octank.Entity> entities = [] as List<octank.Entity>
+    Entities returnEntities = new Entities()
+    returnEntities.entities = entities
+    AWSCredentialsProvider awsCreds = DefaultAWSCredentialsProviderChain.getInstance();
+
+    AmazonComprehend comprehendClient =
+            AmazonComprehendClientBuilder.standard()
+                    .withCredentials(awsCreds)
+                    .withRegion("us-east-1")
+                    .build()
+
+    // Call detectEntities API
+    System.out.println("Calling DetectEntities")
+    DetectEntitiesRequest detectEntitiesRequest = new DetectEntitiesRequest().withText(text)
+            .withLanguageCode("en")
+    DetectEntitiesResult detectEntitiesResult  = comprehendClient.detectEntities(detectEntitiesRequest);
+    detectEntitiesResult.getEntities().each() { Entity awsEntity ->
+        octank.Entity entity = new octank.Entity()
+        entity.beginOffset = awsEntity.beginOffset
+        entity.endOffset = awsEntity.endOffset
+        entity.entityType = awsEntity.type
+        entity.text = awsEntity.text
+        entity.score = awsEntity.score
+        entities.add(entity)
+    }
+    System.out.println("End of DetectEntities\n")
+    returnEntities
+}
+
+private KeyPhrases detectKeyPhrases(String text, String division) {
+    List<KeyPhrase> keyPhrases = [] as List<KeyPhrase>
+    AWSCredentialsProvider awsCreds = DefaultAWSCredentialsProviderChain.getInstance();
+
+    AmazonComprehend comprehendClient =
+            AmazonComprehendClientBuilder.standard()
+                    .withCredentials(awsCreds)
+                    .withRegion("us-east-1")
+                    .build()
+
+    // Call detectKeyPhrases API
+    System.out.println("Calling DetectKeyPhrases");
+    DetectKeyPhrasesRequest detectKeyPhrasesRequest = new DetectKeyPhrasesRequest().withText(text)
+            .withLanguageCode("en")
+    DetectKeyPhrasesResult detectKeyPhrasesResult = comprehendClient.detectKeyPhrases(detectKeyPhrasesRequest)
+    detectKeyPhrasesResult.getKeyPhrases().each { com.amazonaws.services.comprehend.model.KeyPhrase awsKeyPhrase ->
+        KeyPhrase keyPhrase = new KeyPhrase()
+        keyPhrase.score = awsKeyPhrase.score
+        keyPhrase.text = awsKeyPhrase.text
+        keyPhrase.beginOffset = awsKeyPhrase.beginOffset
+        keyPhrase.endOffset = awsKeyPhrase.endOffset
+        keyPhrases.add(keyPhrase)
+    }
+    System.out.println("End of DetectKeyPhrases\n")
+    KeyPhrases returnKeyPhrases = new KeyPhrases()
+    returnKeyPhrases.keyPhrases = keyPhrases
+    returnKeyPhrases
+}
+
+private Languages detectLanguages(String text, String division) {
+    Languages returnLangs = new Languages()
+    List<Language> languages = [] as List<Language>
+    AWSCredentialsProvider awsCreds = DefaultAWSCredentialsProviderChain.getInstance()
+
+    AmazonComprehend comprehendClient =
+            AmazonComprehendClientBuilder.standard()
+                    .withCredentials(awsCreds)
+                    .withRegion("us-east-1")
+                    .build()
+
+    // Call detectDominantLanguage API
+    System.out.println("Calling DetectDominantLanguage")
+    DetectDominantLanguageRequest detectDominantLanguageRequest = new DetectDominantLanguageRequest().withText(text);
+    DetectDominantLanguageResult detectDominantLanguageResult = comprehendClient.detectDominantLanguage(detectDominantLanguageRequest);
+    detectDominantLanguageResult.getLanguages().each { DominantLanguage dominantLanguage ->
+        Language language = new Language()
+        language.score = dominantLanguage.score
+        language.languageCode = dominantLanguage.languageCode
+        languages.add(language)
+    }
+    System.out.println("Calling DetectDominantLanguage\n")
+    System.out.println("Done")
+    returnLangs.languages = languages
+    returnLangs
+
+}
+
+private ComprehendResults detectAll(String text, String division) {
+    ComprehendResults comprehendResults = new ComprehendResults()
+    Sentiment sentiment = detectSentiment(text,division)
+    comprehendResults.sentiment = sentiment
+    comprehendResults.entities = detectEntities(text,division)
+    comprehendResults.keyPhrases = detectKeyPhrases(text,division)
+    comprehendResults.languages = detectLanguages(text,division)
+    comprehendResults
+}
+
